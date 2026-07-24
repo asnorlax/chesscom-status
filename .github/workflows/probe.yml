@@ -1,0 +1,34 @@
+name: chesscom-probe
+
+on:
+  schedule:
+    # ~every 10 minutes, offset off the top of the hour (GitHub delays :00 heavily).
+    # 5 min is the hard minimum; sub-5 schedules are silently ignored.
+    - cron: "4,14,24,34,44,54 * * * *"
+  workflow_dispatch: {}   # lets you run it once by hand to seed the first points
+
+permissions:
+  contents: write         # needed to commit history.json back to the repo
+
+concurrency:
+  group: probe            # never let two runs overlap and race on the push
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: node probe.mjs
+      - name: Commit updated history
+        run: |
+          git config user.name "chesscom-status-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history.json
+          # a new point is appended every run, so there is normally always a change;
+          # the guard just keeps the job green on the rare no-op.
+          git commit -m "update history" || { echo "nothing to commit"; exit 0; }
+          git push
